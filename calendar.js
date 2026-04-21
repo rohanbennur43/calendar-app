@@ -242,17 +242,24 @@ export async function writeDailyStatsToCalendar(leetcodeCount, applicationsCount
 }
 
 /**
- * Schedule daily calendar write at midnight
+ * Schedule daily calendar write at 11:50 PM
  */
 export function scheduleDailyCalendarWrite(getTodayStatsCallback) {
-    // Calculate time until next midnight
+    // Calculate time until next 11:50 PM
     const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(24, 0, 0, 0); // Next midnight
+    const syncTime = new Date(now);
 
-    const timeUntilMidnight = midnight - now;
+    // Set to 11:50 PM today
+    syncTime.setHours(23, 50, 0, 0);
 
-    console.log(`Scheduling daily calendar write in ${Math.floor(timeUntilMidnight / 1000 / 60)} minutes`);
+    // If it's already past 11:50 PM today, schedule for tomorrow
+    if (now >= syncTime) {
+        syncTime.setDate(syncTime.getDate() + 1);
+    }
+
+    const timeUntilSync = syncTime - now;
+
+    console.log(`Scheduling daily calendar write in ${Math.floor(timeUntilSync / 1000 / 60)} minutes (at 11:50 PM)`);
 
     // Schedule the write
     setTimeout(async () => {
@@ -264,14 +271,15 @@ export function scheduleDailyCalendarWrite(getTodayStatsCallback) {
                 return;
             }
 
-            // Get today's stats (which is yesterday's stats at midnight)
+            // Get today's stats (runs at 11:50 PM, so we capture today's complete stats)
             const stats = await getTodayStatsCallback();
 
-            // Write to calendar
+            // Write to calendar for TODAY (useToday = true)
             await writeDailyStatsToCalendar(
                 stats.leetcode,
                 stats.applications,
-                stats.hours
+                stats.hours,
+                true // useToday = true since we're running at 11:50 PM
             );
 
             console.log('Daily stats written to Google Calendar');
@@ -283,5 +291,5 @@ export function scheduleDailyCalendarWrite(getTodayStatsCallback) {
             // Reschedule anyway
             scheduleDailyCalendarWrite(getTodayStatsCallback);
         }
-    }, timeUntilMidnight);
+    }, timeUntilSync);
 }

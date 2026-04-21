@@ -55,17 +55,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Schedule daily calendar write
             scheduleDailyCalendarWrite(async () => {
-                // Get yesterday's stats (since this runs at midnight)
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+                // Get today's stats (since this runs at 11:50 PM, we have today's complete data)
+                const today = new Date();
+                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
                 const { year, month } = {
-                    year: yesterday.getFullYear(),
-                    month: yesterday.getMonth() + 1
+                    year: today.getFullYear(),
+                    month: today.getMonth() + 1
                 };
                 const monthData = await readMonthData(year, month);
-                const dayData = monthData.days[yesterdayStr] || { applications: [], leetcode: 0, hours: 0 };
+                const dayData = monthData.days[todayStr] || { applications: [], leetcode: 0, hours: 0 };
 
                 return {
                     leetcode: dayData.leetcode || 0,

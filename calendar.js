@@ -1,7 +1,6 @@
 // calendar.js - Google Calendar API integration
 
-const CLIENT_ID = 'YOUR_CLIENT_ID_HERE'; // You'll need to set this up in Google Cloud Console
-const API_KEY = 'YOUR_API_KEY_HERE'; // You'll need to set this up in Google Cloud Console
+const CLIENT_ID = '606685190722-9v37rb3nlhj8gbgq1qmgbk952u110ic2.apps.googleusercontent.com';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
@@ -16,7 +15,6 @@ export async function initGoogleCalendar() {
     return new Promise((resolve) => {
         gapi.load('client', async () => {
             await gapi.client.init({
-                apiKey: API_KEY,
                 discoveryDocs: [DISCOVERY_DOC],
             });
             gapiInited = true;

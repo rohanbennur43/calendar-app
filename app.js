@@ -29,7 +29,8 @@ import {
     authenticateGoogleCalendar,
     signOutGoogleCalendar,
     isAuthenticated,
-    scheduleDailyCalendarWrite
+    scheduleDailyCalendarWrite,
+    writeDailyStatsToCalendar
 } from './calendar.js';
 
 // Global state
@@ -224,6 +225,29 @@ function setupEventListeners() {
         } catch (err) {
             console.error('Error with Google Calendar:', err);
             alert(`Error: ${err.message || 'Failed to connect to Google Calendar'}`);
+        }
+    });
+
+    // Test Calendar Sync button
+    document.getElementById('test-calendar-sync-btn').addEventListener('click', async () => {
+        try {
+            const todayStats = await getTodayStats();
+
+            if (todayStats.leetcode === 0 && todayStats.applications === 0) {
+                alert('No activity today! Add some LeetCode problems or applications first.');
+                return;
+            }
+
+            await writeDailyStatsToCalendar(
+                todayStats.leetcode,
+                todayStats.applications,
+                todayStats.leetcode
+            );
+
+            alert(`✅ Events added to Google Calendar!\n\n📝 LeetCode: ${todayStats.leetcode}\n💼 Applications: ${todayStats.applications}\n\nCheck your calendar!`);
+        } catch (err) {
+            console.error('Error syncing to calendar:', err);
+            alert(`Error: ${err.message || 'Failed to sync to calendar'}`);
         }
     });
 }
@@ -746,11 +770,15 @@ async function quickAddHours(hours) {
  */
 function updateGoogleCalendarButton() {
     const btn = document.getElementById('google-calendar-btn');
+    const testBtn = document.getElementById('test-calendar-sync-btn');
+
     if (isAuthenticated()) {
         btn.textContent = '✅ Calendar Connected';
         btn.classList.add('connected');
+        testBtn.classList.remove('hidden');
     } else {
         btn.textContent = '📅 Connect Google Calendar';
         btn.classList.remove('connected');
+        testBtn.classList.add('hidden');
     }
 }

@@ -189,15 +189,15 @@ export async function writeDailyStatsToCalendar(leetcodeCount, applicationsCount
             targetDate.setDate(targetDate.getDate() - 1);
         }
 
-        // Create events at 11:30 PM of the target date
+        // Create events starting at 11:00 PM of the target date (so they don't roll over to next day)
         const eventDate = new Date(targetDate);
-        eventDate.setHours(23, 30, 0, 0);
+        eventDate.setHours(23, 0, 0, 0);
         const eventEndDate = new Date(eventDate);
         eventEndDate.setMinutes(eventEndDate.getMinutes() + 15); // 15-minute event
 
         const events = [];
 
-        // LeetCode event (always create)
+        // LeetCode event (always create) - 11:00 PM - 11:15 PM
         const leetcodeEvent = await createCalendarEvent(
             `📝 LeetCode: ${leetcodeCount} problem${leetcodeCount !== 1 ? 's' : ''} solved`,
             `Completed ${leetcodeCount} LeetCode problem${leetcodeCount !== 1 ? 's' : ''} today`,
@@ -206,7 +206,7 @@ export async function writeDailyStatsToCalendar(leetcodeCount, applicationsCount
         );
         events.push(leetcodeEvent);
 
-        // Applications event (always create)
+        // Applications event (always create) - 11:15 PM - 11:30 PM
         const appEventDate = new Date(eventDate);
         appEventDate.setMinutes(appEventDate.getMinutes() + 15);
         const appEventEndDate = new Date(appEventDate);
@@ -220,7 +220,7 @@ export async function writeDailyStatsToCalendar(leetcodeCount, applicationsCount
         );
         events.push(applicationsEvent);
 
-        // Hours worked event (always create)
+        // Hours worked event (always create) - 11:30 PM - 11:45 PM
         const hoursEventDate = new Date(eventDate);
         hoursEventDate.setMinutes(hoursEventDate.getMinutes() + 30);
         const hoursEventEndDate = new Date(hoursEventDate);

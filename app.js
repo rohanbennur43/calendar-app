@@ -23,30 +23,62 @@ import {
     calculateMonthlyTotals
 } from './stats.js';
 
+import {
+    initGoogleCalendar,
+    initGoogleIdentity,
+    authenticateGoogleCalendar,
+    signOutGoogleCalendar,
+    isAuthenticated,
+    scheduleDailyCalendarWrite
+} from './calendar.js';
+
 // Global state
 let currentDirHandle = null;
 let currentMonthData = null;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async () => {
-    // Check if File System Access API is supported
-    if (!('showDirectoryPicker' in window)) {
-        document.querySelector('.browser-warning').classList.remove('hidden');
-        document.getElementById('select-folder-btn').disabled = true;
-        return;
-    }
-
-    // Try to restore directory access
-    try {
-        currentDirHandle = await getDirectoryHandle();
-        await loadDashboard();
-    } catch (err) {
-        // First time or permissions expired - show setup screen
-        showSetupScreen();
-    }
+    // localStorage version - no permissions needed, go straight to dashboard
+    currentDirHandle = await getDirectoryHandle();
+    await loadDashboard();
 
     // Setup event listeners
     setupEventListeners();
+
+    // Initialize Google Calendar API
+    try {
+        await initGoogleCalendar();
+        initGoogleIdentity(async (response) => {
+            console.log('Google Calendar authenticated', response);
+            updateGoogleCalendarButton();
+
+            // Schedule daily calendar write
+            scheduleDailyCalendarWrite(async () => {
+                // Get yesterday's stats (since this runs at midnight)
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+                const { year, month } = {
+                    year: yesterday.getFullYear(),
+                    month: yesterday.getMonth() + 1
+                };
+                const monthData = await readMonthData(year, month);
+                const dayData = monthData.days[yesterdayStr] || { applications: [], leetcode: 0, hours: 0 };
+
+                return {
+                    leetcode: dayData.leetcode || 0,
+                    applications: dayData.applications ? dayData.applications.length : 0,
+                    hours: dayData.hours || 0
+                };
+            });
+        });
+
+        // Update button state on load
+        updateGoogleCalendarButton();
+    } catch (err) {
+        console.error('Failed to initialize Google Calendar:', err);
+    }
 });
 
 /**
@@ -93,21 +125,67 @@ function hideAllScreens() {
  * Setup all event listeners
  */
 function setupEventListeners() {
-    // Setup screen
-    document.getElementById('select-folder-btn').addEventListener('click', async () => {
-        try {
-            currentDirHandle = await getDirectoryHandle();
-            await loadDashboard();
-        } catch (err) {
-            console.error('Error selecting folder:', err);
-            alert(`Error: ${err.message}`);
+    // Dashboard screen - Quick add buttons
+    document.getElementById('add-application-quick-btn').addEventListener('click', async () => {
+        const urlInput = document.getElementById('job-url-input');
+        const resumeInput = document.getElementById('resume-path-input');
+
+        const url = urlInput.value.trim();
+        if (!url) {
+            alert('Please enter a job URL');
+            return;
+        }
+
+        const resumePath = resumeInput.value.trim();
+
+        await quickAddApplication(url, resumePath);
+
+        // Clear inputs
+        urlInput.value = '';
+        resumeInput.value = '';
+    });
+
+    document.getElementById('add-leetcode-quick-btn').addEventListener('click', async () => {
+        const input = document.getElementById('leetcode-quick-input');
+        const count = parseInt(input.value);
+        if (!count || count <= 0) return;
+
+        await quickAddLeetCode(count);
+        input.value = ''; // Clear input
+    });
+
+    document.getElementById('add-hours-quick-btn').addEventListener('click', async () => {
+        const input = document.getElementById('hours-quick-input');
+        const hours = parseFloat(input.value);
+        if (!hours || hours <= 0) return;
+
+        await quickAddHours(hours);
+        input.value = ''; // Clear input
+    });
+
+    // Enter key support
+    document.getElementById('leetcode-quick-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('add-leetcode-quick-btn').click();
         }
     });
 
-    // Dashboard screen
-    document.getElementById('log-activity-btn').addEventListener('click', () => {
-        prepareLogForm();
-        showLogFormScreen();
+    document.getElementById('hours-quick-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('add-hours-quick-btn').click();
+        }
+    });
+
+    document.getElementById('job-url-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('add-application-quick-btn').click();
+        }
+    });
+
+    document.getElementById('resume-path-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('add-application-quick-btn').click();
+        }
     });
 
     // Log form screen
@@ -128,6 +206,26 @@ function setupEventListeners() {
     document.getElementById('back-to-dashboard-btn').addEventListener('click', () => {
         showDashboardScreen();
     });
+
+    // Google Calendar button
+    document.getElementById('google-calendar-btn').addEventListener('click', async () => {
+        try {
+            if (isAuthenticated()) {
+                // Sign out
+                signOutGoogleCalendar();
+                updateGoogleCalendarButton();
+                alert('Signed out from Google Calendar');
+            } else {
+                // Sign in
+                await authenticateGoogleCalendar();
+                updateGoogleCalendarButton();
+                alert('Connected to Google Calendar! Daily stats will be synced at midnight.');
+            }
+        } catch (err) {
+            console.error('Error with Google Calendar:', err);
+            alert(`Error: ${err.message || 'Failed to connect to Google Calendar'}`);
+        }
+    });
 }
 
 /**
@@ -135,8 +233,8 @@ function setupEventListeners() {
  */
 async function loadDashboard() {
     try {
-        const currentMonth = getCurrentMonth();
-        currentMonthData = await readMonthData(currentDirHandle, currentMonth);
+        const { year, month } = getCurrentMonth();
+        currentMonthData = await readMonthData(year, month);
 
         // Render today's stats
         await renderTodayStats();
@@ -161,7 +259,7 @@ async function loadDashboard() {
  * Render today's stats
  */
 async function renderTodayStats() {
-    const todayStats = await getTodayStats(currentDirHandle);
+    const todayStats = await getTodayStats();
 
     document.getElementById('today-applications').textContent = todayStats.applications;
     document.getElementById('today-leetcode').textContent = todayStats.leetcode;
@@ -172,7 +270,7 @@ async function renderTodayStats() {
  * Render current streak
  */
 async function renderStreak() {
-    const currentStreak = await calculateCurrentStreak(currentDirHandle);
+    const currentStreak = await calculateCurrentStreak();
     document.getElementById('streak-count').textContent = currentStreak;
 }
 
@@ -183,14 +281,13 @@ async function renderCalendar() {
     const calendarGrid = document.getElementById('calendar-grid');
     calendarGrid.innerHTML = ''; // Clear existing
 
-    const currentMonth = getCurrentMonth();
-    const [year, month] = currentMonth.split('-').map(Number);
+    const { year, month } = getCurrentMonth();
     const daysInMonth = new Date(year, month, 0).getDate();
     const today = getTodayDate();
 
     for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
-        const dayData = currentMonthData.days.find(d => d.date === dateStr);
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayData = currentMonthData.days[dateStr];
         const hasActivity = dayData && (
             (dayData.applications && dayData.applications.length > 0) ||
             (dayData.leetcode && dayData.leetcode > 0) ||
@@ -229,33 +326,33 @@ async function renderCalendar() {
  * Render milestones
  */
 async function renderMilestones() {
-    const allTimeTotals = await getAllTimeTotals(currentDirHandle);
-    const milestones = checkMilestones(
-        allTimeTotals.totalApplications,
-        allTimeTotals.totalLeetcode,
-        allTimeTotals.totalHours
-    );
+    const allTimeTotals = await getAllTimeTotals();
+    const achievedMilestones = checkMilestones(allTimeTotals);
+
+    // All possible milestones
+    const allMilestones = [
+        { id: 'first-app', emoji: '🎯', title: 'First Application', threshold: 1, metric: 'applications' },
+        { id: 'ten-apps', emoji: '🔟', title: '10 Applications', threshold: 10, metric: 'applications' },
+        { id: 'fifty-apps', emoji: '🎖️', title: '50 Applications', threshold: 50, metric: 'applications' },
+        { id: 'hundred-apps', emoji: '💯', title: '100 Applications', threshold: 100, metric: 'applications' },
+        { id: 'first-lc', emoji: '💡', title: 'First LeetCode', threshold: 1, metric: 'leetcode' },
+        { id: 'ten-lc', emoji: '🧠', title: '10 LeetCode', threshold: 10, metric: 'leetcode' },
+        { id: 'fifty-lc', emoji: '🏆', title: '50 LeetCode', threshold: 50, metric: 'leetcode' },
+        { id: 'ten-hours', emoji: '⏰', title: '10 Hours', threshold: 10, metric: 'hours' },
+        { id: 'fifty-hours', emoji: '⏳', title: '50 Hours', threshold: 50, metric: 'hours' },
+        { id: 'hundred-hours', emoji: '🔥', title: '100 Hours', threshold: 100, metric: 'hours' }
+    ];
 
     const milestonesGrid = document.getElementById('milestones-grid');
     milestonesGrid.innerHTML = ''; // Clear existing
 
-    // Define milestones
-    const milestoneList = [
-        { label: '10 Applications', achieved: milestones.applications.ten, emoji: '📝' },
-        { label: '50 Applications', achieved: milestones.applications.fifty, emoji: '🎯' },
-        { label: '100 Applications', achieved: milestones.applications.hundred, emoji: '💯' },
-        { label: '25 LeetCode', achieved: milestones.leetcode.twentyFive, emoji: '💻' },
-        { label: '50 LeetCode', achieved: milestones.leetcode.fifty, emoji: '🧠' },
-        { label: '100 LeetCode', achieved: milestones.leetcode.hundred, emoji: '🏆' },
-        { label: '50 Hours', achieved: milestones.hours.fifty, emoji: '⏱️' },
-        { label: '100 Hours', achieved: milestones.hours.hundred, emoji: '⏳' },
-        { label: '200 Hours', achieved: milestones.hours.twoHundred, emoji: '🎖️' }
-    ];
+    // Render all milestones
+    allMilestones.forEach(milestone => {
+        const achieved = achievedMilestones.some(m => m.id === milestone.id);
 
-    milestoneList.forEach(milestone => {
         const badgeEl = document.createElement('div');
         badgeEl.className = 'milestone-badge';
-        if (milestone.achieved) {
+        if (achieved) {
             badgeEl.classList.add('achieved');
         }
 
@@ -266,7 +363,7 @@ async function renderMilestones() {
 
         const labelEl = document.createElement('div');
         labelEl.className = 'milestone-label';
-        labelEl.textContent = milestone.label;
+        labelEl.textContent = milestone.title;
         badgeEl.appendChild(labelEl);
 
         milestonesGrid.appendChild(badgeEl);
@@ -285,7 +382,7 @@ function prepareLogForm() {
 
     // Pre-fill with today's data if it exists
     const today = getTodayDate();
-    const todayData = currentMonthData.days.find(d => d.date === today);
+    const todayData = currentMonthData.days[today];
 
     if (todayData) {
         document.getElementById('leetcode-count').value = todayData.leetcode || 0;
@@ -372,7 +469,7 @@ function addApplicationEntry(appData = null) {
 async function saveActivity() {
     try {
         const today = getTodayDate();
-        const currentMonth = getCurrentMonth();
+        const { year, month } = getCurrentMonth();
 
         // Get form data
         const leetcode = parseInt(document.getElementById('leetcode-count').value) || 0;
@@ -393,16 +490,15 @@ async function saveActivity() {
         });
 
         // Update or create today's entry
-        let todayData = currentMonthData.days.find(d => d.date === today);
+        let todayData = currentMonthData.days[today];
 
         if (!todayData) {
             todayData = {
-                date: today,
                 applications: [],
                 leetcode: 0,
                 hours: 0
             };
-            currentMonthData.days.push(todayData);
+            currentMonthData.days[today] = todayData;
         }
 
         todayData.applications = applications;
@@ -416,13 +512,13 @@ async function saveActivity() {
         currentMonthData.stats.totalHours = monthTotals.totalHours;
 
         // Update streaks
-        const currentStreak = await calculateCurrentStreak(currentDirHandle);
-        const longestStreak = await calculateLongestStreak(currentDirHandle);
+        const currentStreak = await calculateCurrentStreak();
+        const longestStreak = await calculateLongestStreak();
         currentMonthData.stats.currentStreak = currentStreak;
         currentMonthData.stats.longestStreak = longestStreak;
 
         // Save to file
-        await writeMonthData(currentDirHandle, currentMonth, currentMonthData);
+        await writeMonthData(year, month, currentMonthData);
 
         // Reload dashboard
         await loadDashboard();
@@ -437,7 +533,7 @@ async function saveActivity() {
  * @param {string} dateStr - Date in YYYY-MM-DD format
  */
 function showDayDetail(dateStr) {
-    const dayData = currentMonthData.days.find(d => d.date === dateStr);
+    const dayData = currentMonthData.days[dateStr];
 
     // Update detail view
     document.getElementById('detail-date').textContent = dateStr;
@@ -513,4 +609,148 @@ function showDayDetail(dateStr) {
     }
 
     showDetailScreen();
+}
+
+/**
+ * Quick add application
+ */
+async function quickAddApplication(url, resumePath) {
+    try {
+        const today = getTodayDate();
+        const { year, month } = getCurrentMonth();
+
+        // Extract company name from URL
+        let company = 'Unknown';
+        let position = 'Position';
+
+        try {
+            const urlObj = new URL(url);
+            const hostname = urlObj.hostname;
+
+            // Try common job board patterns
+            if (hostname.includes('greenhouse.io')) {
+                const match = url.match(/greenhouse\.io\/([^/]+)/);
+                if (match) company = match[1];
+            } else if (hostname.includes('lever.co')) {
+                const match = url.match(/lever\.co\/([^/]+)/);
+                if (match) company = match[1];
+            } else if (hostname.includes('ashbyhq.com')) {
+                const match = url.match(/ashbyhq\.com\/([^/]+)/);
+                if (match) company = match[1];
+            } else if (hostname.includes('linkedin.com')) {
+                // Try to extract from query params or use LinkedIn
+                company = 'LinkedIn';
+            } else {
+                // Extract from domain (e.g., google.com -> Google)
+                const domain = hostname.replace('www.', '').split('.')[0];
+                company = domain.charAt(0).toUpperCase() + domain.slice(1);
+            }
+
+            // Try to extract position from URL path
+            const pathMatch = url.match(/\/(software|engineer|developer|designer|product|data|frontend|backend|fullstack|full-stack)/i);
+            if (pathMatch) {
+                position = pathMatch[1].charAt(0).toUpperCase() + pathMatch[1].slice(1);
+            }
+        } catch (err) {
+            console.error('Error parsing URL:', err);
+        }
+
+        let todayData = currentMonthData.days[today];
+
+        if (!todayData) {
+            todayData = {
+                applications: [],
+                leetcode: 0,
+                hours: 0
+            };
+            currentMonthData.days[today] = todayData;
+        }
+
+        todayData.applications.push({
+            timestamp: new Date().toISOString(),
+            company,
+            position,
+            url,
+            notes: '',
+            resume: resumePath ? { path: resumePath } : null
+        });
+
+        await writeMonthData(year, month, currentMonthData);
+        await loadDashboard();
+    } catch (err) {
+        console.error('Error adding application:', err);
+        alert(`Error: ${err.message}`);
+    }
+}
+
+/**
+ * Quick add LeetCode
+ */
+async function quickAddLeetCode(count) {
+    try {
+        const today = getTodayDate();
+        const { year, month } = getCurrentMonth();
+
+        let todayData = currentMonthData.days[today];
+
+        if (!todayData) {
+            todayData = {
+                applications: [],
+                leetcode: 0,
+                hours: 0
+            };
+            currentMonthData.days[today] = todayData;
+        }
+
+        todayData.leetcode = (todayData.leetcode || 0) + count;
+
+        await writeMonthData(year, month, currentMonthData);
+        await loadDashboard();
+    } catch (err) {
+        console.error('Error adding LeetCode:', err);
+        alert(`Error: ${err.message}`);
+    }
+}
+
+/**
+ * Quick add hours
+ */
+async function quickAddHours(hours) {
+    try {
+        const today = getTodayDate();
+        const { year, month } = getCurrentMonth();
+
+        let todayData = currentMonthData.days[today];
+
+        if (!todayData) {
+            todayData = {
+                applications: [],
+                leetcode: 0,
+                hours: 0
+            };
+            currentMonthData.days[today] = todayData;
+        }
+
+        todayData.hours = (todayData.hours || 0) + hours;
+
+        await writeMonthData(year, month, currentMonthData);
+        await loadDashboard();
+    } catch (err) {
+        console.error('Error adding hours:', err);
+        alert(`Error: ${err.message}`);
+    }
+}
+
+/**
+ * Update Google Calendar button state
+ */
+function updateGoogleCalendarButton() {
+    const btn = document.getElementById('google-calendar-btn');
+    if (isAuthenticated()) {
+        btn.textContent = '✅ Calendar Connected';
+        btn.classList.add('connected');
+    } else {
+        btn.textContent = '📅 Connect Google Calendar';
+        btn.classList.remove('connected');
+    }
 }

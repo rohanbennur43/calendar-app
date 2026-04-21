@@ -78,6 +78,12 @@ header h1 {
     font-size: 28px;
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
 .streak-display {
     display: flex;
     align-items: center;
@@ -220,11 +226,13 @@ header h1 {
     text-align: center;
     background: #f9fafb;
     border: 2px solid #e5e7eb;
+    opacity: 0.5;
 }
 
 .milestone-badge.achieved {
     background: #dcfce7;
     border-color: #22c55e;
+    opacity: 1;
 }
 
 .milestone-emoji {
@@ -426,6 +434,48 @@ header h1 {
     background: #1d4ed8;
 }
 
+.quick-add-section {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.quick-add-item {
+    display: flex;
+    gap: 5px;
+}
+
+.quick-add-item input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.quick-add-item button {
+    white-space: nowrap;
+}
+
+.quick-add-application {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.quick-add-application input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.quick-add-application button {
+    white-space: nowrap;
+}
+
 .btn-secondary {
     background: #e5e7eb;
     color: #374151;
@@ -433,6 +483,15 @@ header h1 {
 
 .btn-secondary:hover {
     background: #d1d5db;
+}
+
+.btn-secondary.connected {
+    background: #22c55e;
+    color: white;
+}
+
+.btn-secondary.connected:hover {
+    background: #16a34a;
 }
 
 /* Utility */

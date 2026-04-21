@@ -233,18 +233,14 @@ function setupEventListeners() {
         try {
             const todayStats = await getTodayStats();
 
-            if (todayStats.leetcode === 0 && todayStats.applications === 0 && todayStats.hours === 0) {
-                alert('No activity today! Add some LeetCode problems, applications, or hours first.');
-                return;
-            }
-
             await writeDailyStatsToCalendar(
                 todayStats.leetcode,
                 todayStats.applications,
-                todayStats.hours
+                todayStats.hours,
+                true // useToday = true for test button
             );
 
-            alert(`✅ Events added to Google Calendar!\n\n📝 LeetCode: ${todayStats.leetcode}\n💼 Applications: ${todayStats.applications}\n⏰ Hours: ${todayStats.hours}\n\nCheck your calendar!`);
+            alert(`✅ Events added to Google Calendar for TODAY!\n\n📝 LeetCode: ${todayStats.leetcode}\n💼 Applications: ${todayStats.applications}\n⏰ Hours: ${todayStats.hours}\n\nCheck your calendar!`);
         } catch (err) {
             console.error('Error syncing to calendar:', err);
             alert(`Error: ${err.message || 'Failed to sync to calendar'}`);

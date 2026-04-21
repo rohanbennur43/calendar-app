@@ -169,67 +169,70 @@ export async function createCalendarEvent(summary, description, startTime, endTi
  * @param {number} leetcodeCount - Number of LeetCode problems solved
  * @param {number} applicationsCount - Number of applications submitted
  * @param {number} hoursWorked - Total hours worked
+ * @param {boolean} useToday - If true, create events for today; if false, for yesterday (default: false for midnight sync)
  */
-export async function writeDailyStatsToCalendar(leetcodeCount, applicationsCount, hoursWorked) {
+export async function writeDailyStatsToCalendar(leetcodeCount, applicationsCount, hoursWorked, useToday = false) {
     if (!isAuthenticated()) {
         throw new Error('Not authenticated with Google Calendar');
     }
 
     try {
         const now = new Date();
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
+        let targetDate;
 
-        // Create events for yesterday at midnight (since this runs at 12 AM)
-        const eventDate = new Date(yesterday);
-        eventDate.setHours(23, 30, 0, 0); // 11:30 PM
+        if (useToday) {
+            // For test button - use today
+            targetDate = new Date(now);
+        } else {
+            // For midnight sync - use yesterday
+            targetDate = new Date(now);
+            targetDate.setDate(targetDate.getDate() - 1);
+        }
+
+        // Create events at 11:30 PM of the target date
+        const eventDate = new Date(targetDate);
+        eventDate.setHours(23, 30, 0, 0);
         const eventEndDate = new Date(eventDate);
         eventEndDate.setMinutes(eventEndDate.getMinutes() + 15); // 15-minute event
 
         const events = [];
 
-        // LeetCode event
-        if (leetcodeCount > 0) {
-            const leetcodeEvent = await createCalendarEvent(
-                `📝 LeetCode: ${leetcodeCount} problem${leetcodeCount > 1 ? 's' : ''} solved`,
-                `Completed ${leetcodeCount} LeetCode problem${leetcodeCount > 1 ? 's' : ''} today`,
-                eventDate,
-                eventEndDate
-            );
-            events.push(leetcodeEvent);
-        }
+        // LeetCode event (always create)
+        const leetcodeEvent = await createCalendarEvent(
+            `📝 LeetCode: ${leetcodeCount} problem${leetcodeCount !== 1 ? 's' : ''} solved`,
+            `Completed ${leetcodeCount} LeetCode problem${leetcodeCount !== 1 ? 's' : ''} today`,
+            eventDate,
+            eventEndDate
+        );
+        events.push(leetcodeEvent);
 
-        // Applications event
-        if (applicationsCount > 0) {
-            const appEventDate = new Date(eventDate);
-            appEventDate.setMinutes(appEventDate.getMinutes() + 15);
-            const appEventEndDate = new Date(appEventDate);
-            appEventEndDate.setMinutes(appEventEndDate.getMinutes() + 15);
+        // Applications event (always create)
+        const appEventDate = new Date(eventDate);
+        appEventDate.setMinutes(appEventDate.getMinutes() + 15);
+        const appEventEndDate = new Date(appEventDate);
+        appEventEndDate.setMinutes(appEventEndDate.getMinutes() + 15);
 
-            const applicationsEvent = await createCalendarEvent(
-                `💼 Applications: ${applicationsCount} submitted`,
-                `Submitted ${applicationsCount} job application${applicationsCount > 1 ? 's' : ''} today`,
-                appEventDate,
-                appEventEndDate
-            );
-            events.push(applicationsEvent);
-        }
+        const applicationsEvent = await createCalendarEvent(
+            `💼 Applications: ${applicationsCount} submitted`,
+            `Submitted ${applicationsCount} job application${applicationsCount !== 1 ? 's' : ''} today`,
+            appEventDate,
+            appEventEndDate
+        );
+        events.push(applicationsEvent);
 
-        // Hours worked event
-        if (hoursWorked > 0) {
-            const hoursEventDate = new Date(eventDate);
-            hoursEventDate.setMinutes(hoursEventDate.getMinutes() + 30);
-            const hoursEventEndDate = new Date(hoursEventDate);
-            hoursEventEndDate.setMinutes(hoursEventEndDate.getMinutes() + 15);
+        // Hours worked event (always create)
+        const hoursEventDate = new Date(eventDate);
+        hoursEventDate.setMinutes(hoursEventDate.getMinutes() + 30);
+        const hoursEventEndDate = new Date(hoursEventDate);
+        hoursEventEndDate.setMinutes(hoursEventEndDate.getMinutes() + 15);
 
-            const hoursEvent = await createCalendarEvent(
-                `⏰ Hours Worked: ${hoursWorked} hour${hoursWorked !== 1 ? 's' : ''}`,
-                `Worked ${hoursWorked} hour${hoursWorked !== 1 ? 's' : ''} today`,
-                hoursEventDate,
-                hoursEventEndDate
-            );
-            events.push(hoursEvent);
-        }
+        const hoursEvent = await createCalendarEvent(
+            `⏰ Hours Worked: ${hoursWorked} hour${hoursWorked !== 1 ? 's' : ''}`,
+            `Worked ${hoursWorked} hour${hoursWorked !== 1 ? 's' : ''} today`,
+            hoursEventDate,
+            hoursEventEndDate
+        );
+        events.push(hoursEvent);
 
         return events;
     } catch (err) {

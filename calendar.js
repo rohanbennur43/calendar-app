@@ -168,9 +168,9 @@ export async function createCalendarEvent(summary, description, startTime, endTi
  * Write daily stats to Google Calendar
  * @param {number} leetcodeCount - Number of LeetCode problems solved
  * @param {number} applicationsCount - Number of applications submitted
- * @param {number} problemsCount - Total number of problems solved
+ * @param {number} hoursWorked - Total hours worked
  */
-export async function writeDailyStatsToCalendar(leetcodeCount, applicationsCount, problemsCount) {
+export async function writeDailyStatsToCalendar(leetcodeCount, applicationsCount, hoursWorked) {
     if (!isAuthenticated()) {
         throw new Error('Not authenticated with Google Calendar');
     }
@@ -215,20 +215,20 @@ export async function writeDailyStatsToCalendar(leetcodeCount, applicationsCount
             events.push(applicationsEvent);
         }
 
-        // Total problems event
-        if (problemsCount > 0) {
-            const problemsEventDate = new Date(eventDate);
-            problemsEventDate.setMinutes(problemsEventDate.getMinutes() + 30);
-            const problemsEventEndDate = new Date(problemsEventDate);
-            problemsEventEndDate.setMinutes(problemsEventEndDate.getMinutes() + 15);
+        // Hours worked event
+        if (hoursWorked > 0) {
+            const hoursEventDate = new Date(eventDate);
+            hoursEventDate.setMinutes(hoursEventDate.getMinutes() + 30);
+            const hoursEventEndDate = new Date(hoursEventDate);
+            hoursEventEndDate.setMinutes(hoursEventEndDate.getMinutes() + 15);
 
-            const problemsEvent = await createCalendarEvent(
-                `🎯 Total Problems: ${problemsCount} solved`,
-                `Solved ${problemsCount} problem${problemsCount > 1 ? 's' : ''} in total today`,
-                problemsEventDate,
-                problemsEventEndDate
+            const hoursEvent = await createCalendarEvent(
+                `⏰ Hours Worked: ${hoursWorked} hour${hoursWorked !== 1 ? 's' : ''}`,
+                `Worked ${hoursWorked} hour${hoursWorked !== 1 ? 's' : ''} today`,
+                hoursEventDate,
+                hoursEventEndDate
             );
-            events.push(problemsEvent);
+            events.push(hoursEvent);
         }
 
         return events;
@@ -268,7 +268,7 @@ export function scheduleDailyCalendarWrite(getTodayStatsCallback) {
             await writeDailyStatsToCalendar(
                 stats.leetcode,
                 stats.applications,
-                stats.leetcode // Using leetcode as total problems for now
+                stats.hours
             );
 
             console.log('Daily stats written to Google Calendar');
